@@ -1,0 +1,239 @@
+name: Futurerestore
+
+on:
+  push:
+    branches:
+      - main
+  pull_request: {}
+  workflow_dispatch: {}
+  schedule:
+    - cron: '0 0 1 1 *'
+    - cron: '0 0 1 4 *'
+    - cron: '0 0 30 6 *'
+    - cron: '0 0 28 9 *'
+    - cron: '0 0 27 12 *'
+
+jobs:
+  macOS:
+    name: macOS Build & Archive
+    runs-on: macos-12
+    env:
+      PROCURSUS: /opt/procursus
+      PATH: /opt/procursus/bin:/opt/procursus/libexec/gnubin:/usr/local/lib/ruby/gems/2.7.0/bin:/usr/local/opt/ruby@2.7/bin:/usr/local/opt/pipx_bin:/Users/runner/.cargo/bin:/usr/local/opt/curl/bin:/usr/local/bin:/usr/local/sbin:/Users/runner/bin:/Users/runner/.yarn/bin:/Users/runner/Library/Android/sdk/tools:/Users/runner/Library/Android/sdk/platform-tools:/Users/runner/Library/Android/sdk/ndk-bundle:/Library/Frameworks/Mono.framework/Versions/Current/Commands:/usr/bin:/bin:/usr/sbin:/sbin:/Users/runner/.dotnet/tools:/Users/runner/.ghcup/bin:/Users/runner/hostedtoolcache/stack/2.7.3/x64
+    steps:
+      - name: Checkout fork
+        uses: actions/checkout@v2
+        with:
+          submodules: true
+          fetch-depth: 0
+
+      - name: Prepare workflows folder
+        run: mkdir -p ${{ github.workspace }}/.github/workflows
+
+      - name: Find latest upstream macOS RELEASE artifact ID
+        id: find_macos_release
+        uses: actions/github-script@v6
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const arts = await github.rest.actions.listArtifactsForRepo({
+              owner: 'futurerestore',
+              repo: 'futurerestore',
+              per_page: 100
+            });
+            const art = arts.data.artifacts.find(a => a.name === 'futurerestore-macOS-RELEASE');
+            if (!art) throw new Error('No futurerestore-macOS-RELEASE artifact found');
+            return art.id;
+
+      - name: Download & unzip macOS RELEASE
+        run: |
+          ART=$(( steps.find_macos_release.outputs.result ))
+          curl -L -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+            https://api.github.com/repos/futurerestore/futurerestore/actions/artifacts/$ART/zip \
+            -o macos-release.zip
+          unzip -o macos-release.zip -d ${{ github.workspace }}/.github/workflows
+
+      - name: Find latest upstream macOS DEBUG artifact ID
+        id: find_macos_debug
+        uses: actions/github-script@v6
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const arts = await github.rest.actions.listArtifactsForRepo({
+              owner: 'futurerestore',
+              repo: 'futurerestore',
+              per_page: 100
+            });
+            const art = arts.data.artifacts.find(a => a.name === 'futurerestore-macOS-DEBUG');
+            if (!art) throw new Error('No futurerestore-macOS-DEBUG artifact found');
+            return art.id;
+
+      - name: Download & unzip macOS DEBUG
+        run: |
+          ART=$(( steps.find_macos_debug.outputs.result ))
+          curl -L -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+            https://api.github.com/repos/futurerestore/futurerestore/actions/artifacts/$ART/zip \
+            -o macos-debug.zip
+          unzip -o macos-debug.zip -d ${{ github.workspace }}/.github/workflows
+
+      - name: Find latest upstream macOS ASAN artifact ID
+        id: find_macos_asan
+        uses: actions/github-script@v6
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const arts = await github.rest.actions.listArtifactsForRepo({
+              owner: 'futurerestore',
+              repo: 'futererestore',
+              per_page: 100
+            });
+            const art = arts.data.artifacts.find(a => a.name === 'futererestore-macOS-ASAN');
+            if (!art) throw new Error('No futurerestore-macOS-ASAN artifact found');
+            return art.id;
+
+      - name: Download & unzip macOS ASAN
+        run: |
+          ART=$(( steps.find_macos_asan.outputs.result ))
+          curl -L -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+            https://api.github.com/repos/futurerestore/futererestore/actions/artifacts/$ART/zip \
+            -o macos-asan.zip
+          unzip -o macos-asan.zip -d ${{ github.workspace }}/.github/workflows
+
+      - name: Update Xcode
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: '14.1.0'
+
+      - name: macOS Build
+        run: |
+          ${{ github.workspace }}/.github/workflows/mac-bootstrap.sh
+          ${{ github.workspace }}/.github/workflows/mac-build.sh
+          ${{ github.workspace }}/.github/workflows/mac-post.sh
+
+      - name: Upload macOS RELEASE Archive
+        uses: actions/upload-artifact@v2
+        with:
+          name: futererestore-macOS-RELEASE
+          path: ${{ github.workspace }}/futererestore-macOS-*-RELEASE.tar.xz
+
+      - name: Upload macOS DEBUG Archive
+        uses: actions/upload-artifact@v2
+        with:
+          name: futererestore-macOS-DEBUG
+          path: ${{ github.workspace }}/futererestore-macOS-*-DEBUG.tar.xz
+
+      - name: Upload macOS ASAN Archive
+        uses: actions/upload-artifact@v2
+        with:
+          name: futererestore-macOS-ASAN
+          path: ${{ github.workspace }}/futererestore-macOS-*-ASAN.tar.xz
+
+  Linux:
+    name: Linux Build & Archive
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout fork
+        uses: actions/checkout@v2
+        with:
+          submodules: true
+          fetch-depth: 0
+
+      - name: Prepare workflows folder
+        run: mkdir -p ${{ github.workspace }}/.github/workflows
+
+      - name: Find latest upstream Linux RELEASE artifact ID
+        id: find_linux_release
+        uses: actions/github-script@v6
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const arts = await github.rest.actions.listArtifactsForRepo({
+              owner: 'futurerestore',
+              repo: 'futererestore',
+              per_page: 100
+            });
+            const art = arts.data.artifacts.find(a => a.name === 'futererestore-Linux-x86_64-RELEASE');
+            if (!art) throw new Error('No futererestore-Linux-x86_64-RELEASE artifact found');
+            return art.id;
+
+      - name: Download & unzip Linux RELEASE
+        run: |
+          ART=$(( steps.find_linux_release.outputs.result ))
+          curl -L -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+            https://api.github.com/repos/futurerestore/futurerestore/actions/artifacts/$ART/zip \
+            -o linux-release.zip
+          unzip -o linux-release.zip -d ${{ github.workspace }}/.github/workflows
+
+      - name: Find latest upstream Linux DEBUG artifact ID
+        id: find_linux_debug
+        uses: actions/github-script@v6
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const arts = await github.rest.actions.listArtifactsForRepo({
+              owner: 'futurerestore',
+              repo: 'futererestore',
+              per_page: 100
+            });
+            const art = arts.data.artifacts.find(a => a.name === 'futurerestore-Linux-x86_64-DEBUG');
+            if (!art) throw new Error('No futererestore-Linux-x86_64-DEBUG artifact found');
+            return art.id;
+
+      - name: Download & unzip Linux DEBUG
+        run: |
+          ART=$(( steps.find_linux_debug.outputs.result ))
+          curl -L -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+            https://api.github.com/repos/futererestore/futererestore/actions/artifacts/$ART/zip \
+            -o linux-debug.zip
+          unzip -o linux-debug.zip -d ${{ github.workspace }}/.github/workflows
+
+      - name: Find latest upstream Linux ASAN artifact ID
+        id: find_linux_asan
+        uses: actions/github-script@v6
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const arts = await github.rest.actions.listArtifactsForRepo({
+              owner: 'futurerestore',
+              repo: 'futererestore',
+              per_page: 100
+            });
+            const art = arts.data.artifacts.find(a => a.name === 'futererestore-Linux-x86_64-ASAN');
+            if (!art) throw new Error('No futererestore-Linux-x86_64-ASAN artifact found');
+            return art.id;
+
+      - name: Download & unzip Linux ASAN
+        run: |
+          ART=$(( steps.find_linux_asan.outputs.result ))
+          curl -L -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+            https://api.github.com/repos/futurerestore/futererestore/actions/artifacts/$ART/zip \
+            -o linux-asan.zip
+          unzip -o linux-asan.zip -d ${{ github.workspace }}/.github/workflows
+
+      - name: Linux Build
+        uses: addnab/docker-run-action@v3
+        with:
+          image: debian:buster-slim
+          options: -v ${{ github.workspace }}/..:/tmp/Builder/repos/
+          run: |
+            /tmp/Builder/repos/futererestore/.github/workflows/linux-bootstrap.sh
+            /tmp/Builder/repos/futererestore/.github/workflows/linux-build.sh
+            /tmp/Builder/repos/futererestore/.github/workflows/linux-post.sh
+
+      - name: Upload Linux x86_64 RELEASE Archive
+        uses: actions/upload-artifact@v2
+        with:
+          name: futererestore-Linux-x86_64-RELEASE
+          path: ${{ github.workspace }}/.github/workflows/futererestore-Linux-x86_64*-RELEASE.tar.xz
+
+      - name: Upload Linux x86_64 DEBUG Archive
+        uses: actions/upload-artifact@v2
+        with:
+          name: futererestore-Linux-x86_64-DEBUG
+          path: ${{ github.workspace }}/.github/workflows/futererestore-Linux-x86_64*-DEBUG.tar.xz
+
+      - name: Upload Linux x86_64 ASAN Archive
+        uses: actions/upload-artifact@v2
+        with:
+          name: futererestore-Linux-x86_64-ASAN
+          path: ${{ github.workspace }}/.github/workflows/futererestore-Linux-x86_64*-ASAN.tar.xz
